@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Validation Report</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            color: #e2e8f0;
+            min-height: 100vh;
+            padding: 40px 24px;
+        }
+        .container { max-width: 960px; margin: 0 auto; }
+
+        /* Header */
+        .header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+        .header h1 {
+            font-size: 1.8em;
+            font-weight: 700;
+            color: #f8fafc;
+            letter-spacing: -0.5px;
+        }
+        .header .subtitle {
+            color: #94a3b8;
+            font-size: 0.95em;
+            margin-top: 6px;
+        }
+
+        /* Status banner */
+        .status-banner {
+            text-align: center;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+            font-size: 1.25em;
+            font-weight: 600;
+        }
+        .status-pass {
+            background: linear-gradient(135deg, #065f46, #047857);
+            border: 1px solid #10b981;
+        }
+        .status-fail {
+            background: linear-gradient(135deg, #7f1d1d, #991b1b);
+            border: 1px solid #ef4444;
+        }
+        .status-banner .icon { font-size: 1.4em; margin-right: 8px; }
+
+        /* Stat cards */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 28px;
+        }
+        .stat-card {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            backdrop-filter: blur(10px);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+        }
+        .card-pass { border-color: rgba(16,185,129,0.3); }
+        .card-fail { border-color: rgba(239,68,68,0.3); }
+        .stat-number { font-size: 2em; font-weight: 700; color: #f8fafc; }
+        .card-pass .stat-number { color: #34d399; }
+        .card-fail .stat-number { color: #f87171; }
+        .stat-label { color: #94a3b8; font-size: 0.85em; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+        /* Table */
+        .table-wrapper {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px;
+            overflow: hidden;
+            backdrop-filter: blur(10px);
+        }
+        table { width: 100%; border-collapse: collapse; }
+        th {
+            background: rgba(255,255,255,0.06);
+            color: #94a3b8;
+            font-size: 0.75em;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            padding: 14px 20px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+        }
+        td {
+            padding: 14px 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            font-size: 0.92em;
+        }
+        tr:last-child td { border-bottom: none; }
+        tr:hover { background: rgba(255,255,255,0.03); }
+        .row-fail { background: rgba(239,68,68,0.05); }
+        .center { text-align: center; }
+        code {
+            background: rgba(255,255,255,0.08);
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 0.9em;
+            color: #a5b4fc;
+            font-family: 'Cascadia Code', 'Fira Code', monospace;
+        }
+
+        /* Badges */
+        .badge {
+            display: inline-block;
+            padding: 4px 14px;
+            border-radius: 20px;
+            font-size: 0.78em;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+        .badge.pass {
+            background: rgba(16,185,129,0.15);
+            color: #34d399;
+            border: 1px solid rgba(16,185,129,0.3);
+        }
+        .badge.fail {
+            background: rgba(239,68,68,0.15);
+            color: #f87171;
+            border: 1px solid rgba(239,68,68,0.3);
+        }
+
+        /* Detail text */
+        .detail-ok { color: #94a3b8; }
+        .detail-bad { color: #fbbf24; }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            margin-top: 32px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255,255,255,0.06);
+            color: #64748b;
+            font-size: 0.82em;
+        }
+        .footer span { color: #94a3b8; }
+
+        @media (max-width: 640px) {
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+            td, th { padding: 10px 12px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Data Validation Report</h1>
+            <p class="subtitle">student-mat.csv &mdash; Great Expectations Suite</p>
+        </div>
+
+        <div class="status-banner status-pass">
+            <span class="icon">&#10003;</span> All Validations Passed
+        </div>
+
+        <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-number">6</div>
+            <div class="stat-label">Total Checks</div>
+        </div>
+        <div class="stat-card card-pass">
+            <div class="stat-number">6</div>
+            <div class="stat-label">Passed</div>
+        </div>
+        <div class="stat-card card-fail">
+            <div class="stat-number">0</div>
+            <div class="stat-label">Failed</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">100%</div>
+            <div class="stat-label">Pass Rate</div>
+        </div>
+        </div>
+
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Column</th>
+                        <th>Check</th>
+                        <th>Constraint</th>
+                        <th class="center">Status</th>
+                        <th>Details</th>
+                    </tr>
+                </thead>
+                <tbody>
+            <tr class="row-pass">
+                <td><strong>G3</strong></td>
+                <td>Be Between</td>
+                <td><code>0.0 &le; x &le; 20.0</code></td>
+                <td class="center"><span class="badge pass">PASS</span></td>
+                <td><span class="detail-ok">395 rows checked &mdash; all valid</span></td>
+            </tr>
+            <tr class="row-pass">
+                <td><strong>G3</strong></td>
+                <td>Not Be Null</td>
+                <td><code>NOT NULL</code></td>
+                <td class="center"><span class="badge pass">PASS</span></td>
+                <td><span class="detail-ok">395 rows checked &mdash; all valid</span></td>
+            </tr>
+            <tr class="row-pass">
+                <td><strong>age</strong></td>
+                <td>Be Between</td>
+                <td><code>15.0 &le; x &le; 22.0</code></td>
+                <td class="center"><span class="badge pass">PASS</span></td>
+                <td><span class="detail-ok">395 rows checked &mdash; all valid</span></td>
+            </tr>
+            <tr class="row-pass">
+                <td><strong>G1</strong></td>
+                <td>Not Be Null</td>
+                <td><code>NOT NULL</code></td>
+                <td class="center"><span class="badge pass">PASS</span></td>
+                <td><span class="detail-ok">395 rows checked &mdash; all valid</span></td>
+            </tr>
+            <tr class="row-pass">
+                <td><strong>G2</strong></td>
+                <td>Not Be Null</td>
+                <td><code>NOT NULL</code></td>
+                <td class="center"><span class="badge pass">PASS</span></td>
+                <td><span class="detail-ok">395 rows checked &mdash; all valid</span></td>
+            </tr>
+            <tr class="row-pass">
+                <td><strong>studytime</strong></td>
+                <td>Be Between</td>
+                <td><code>1.0 &le; x &le; 4.0</code></td>
+                <td class="center"><span class="badge pass">PASS</span></td>
+                <td><span class="detail-ok">395 rows checked &mdash; all valid</span></td>
+            </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="footer">
+            <span>May 15, 2026 at 03:49 PM</span> &nbsp;&bull;&nbsp;
+            Great Expectations v1.17.2 &nbsp;&bull;&nbsp;
+            Python 3.12
+        </div>
+    </div>
+</body>
+</html>
