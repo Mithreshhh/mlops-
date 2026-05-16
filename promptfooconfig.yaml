@@ -1,0 +1,30 @@
+description: Student Performance Explanation Tests
+
+prompts:
+  - "Explain the academic performance of a student with first period grade G1={{G1}} and second period grade G2={{G2}}. Passing grade is 10 out of 20."
+
+providers:
+  - id: echo
+
+tests:
+  - vars:
+      G1: "15"
+      G2: "16"
+    assert:
+      - type: contains
+        value: "positive"
+      - type: contains
+        value: "G1=15"
+      - type: contains
+        value: "G2=16"
+
+  - vars:
+      G1: "4"
+      G2: "5"
+    assert:
+      - type: contains
+        value: "improvement"
+      - type: contains
+        value: "G1=4"
+      - type: contains
+        value: "G2=5"

@@ -23,7 +23,12 @@ mlartifacts/
 
 # Data (tracked via DVC, not Git)
 *.csv
+*.parquet
 !data/.gitkeep
+
+# Feast generated files
+data/registry.db
+data/online_store.db
 
 # Environment variables / secrets
 .env
@@ -59,5 +64,12 @@ coverage.xml
 # Logs
 *.log
 
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
 # Confusion matrix temp artifacts
 confusion_matrix.png
+
+# Personal notes
+understanding.txt
