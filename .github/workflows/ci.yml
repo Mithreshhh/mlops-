@@ -33,3 +33,4 @@ jobs:
           file: Dockerfile.api
           push: true
           tags: mithreshh/student-api:latest
+ 
