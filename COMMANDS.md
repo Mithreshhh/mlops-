@@ -1,285 +1,393 @@
-# MLOps Student — Commands Reference
+# MLOps Student — Run Guide (All Ways)
 
-## Project URLs (after everything is running)
+This project can run in 5 different ways, from simplest to most production-like:
 
-| Service            | URL                        | Purpose                          |
-|--------------------|----------------------------|----------------------------------|
-| Frontend           | http://localhost:3000       | React prediction UI              |
-| FastAPI            | http://localhost:8000       | REST API (`/predict`, `/health`) |
-| FastAPI Docs       | http://localhost:8000/docs  | Swagger / OpenAPI docs           |
-| FastAPI Metrics    | http://localhost:8000/metrics | Prometheus metrics endpoint    |
-| MLflow             | http://localhost:5000       | Experiment tracking UI           |
-| Marquez API        | http://localhost:5001       | Lineage API                      |
-| Marquez Web        | http://localhost:3002       | Lineage UI                       |
-| Prometheus         | http://localhost:9090       | Metrics dashboard                |
-| Grafana            | http://localhost:3001       | Monitoring dashboards            |
-
-Grafana default login: `admin` / `admin`
+| # | Mode | What runs where | When to use |
+|---|------|----------------|-------------|
+| 1 | **Bare metal (venv)** | Python scripts directly on your machine | Development, debugging, training |
+| 2 | **Docker (single service)** | One container at a time | Testing a single piece in isolation |
+| 3 | **Docker Compose** | All 8 services in containers on your machine | Local full-stack demo |
+| 4 | **Kubernetes (Minikube)** | API + Frontend pods on Minikube | Practice production K8s deployment |
+| 5 | **ArgoCD (GitOps)** | K8s pulls from GitHub automatically | True production-style continuous deployment |
 
 ---
 
-## 1. Initial Setup (one-time)
+## URLs Reference
 
-### 1a. Create Python 3.12 virtual environment
+| Service | Docker URL | Kubernetes URL |
+|---------|-----------|----------------|
+| Frontend | http://localhost:3000 | http://localhost:30081 |
+| FastAPI | http://localhost:8000 | http://localhost:30080 |
+| FastAPI Docs | http://localhost:8000/docs | http://localhost:30080/docs |
+| MLflow | http://localhost:5000 | (still in Docker) |
+| Marquez Web | http://localhost:3002 | (still in Docker) |
+| Marquez API | http://localhost:5001 | (still in Docker) |
+| Prometheus | http://localhost:9090 | (still in Docker) |
+| Grafana | http://localhost:3001 | (still in Docker) |
+| ArgoCD UI | — | https://localhost:8080 |
+
+Grafana login: `admin` / `admin`
+
+---
+
+# Mode 1 — Bare Metal (Inside venv)
+
+Run everything directly on your Windows machine using a Python virtual environment. No containers, no Kubernetes. Easiest for development.
+
+## 1.1 One-time setup
 
 ```powershell
-python -m venv venv
+py -3.12 -m venv venv
 .\venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
 pip install -r requirements.txt
-```
-
-### 1b. Install frontend dependencies
-
-```powershell
 cd frontend
 npm install
 cd ..
 ```
 
-### 1c. Install promptfoo (optional, needs Node.js)
+You'll know the venv is active when your prompt shows `(venv)`.
 
-```powershell
-npm install -g promptfoo
-```
+## 1.2 Train the model (needs 2 terminals)
 
----
-
-## 2. Train the Model (run locally BEFORE Docker)
-
-You must train at least once so `mlruns/` and `mlartifacts/` contain a registered model.
-Docker containers mount these folders.
-
-### 2a. Start MLflow server locally
+**Terminal 1 — MLflow server:**
 
 ```powershell
 .\venv\Scripts\Activate.ps1
 mlflow server --host 127.0.0.1 --port 5000
 ```
 
-### 2b. In a SECOND terminal — run training
+Leave this running. Open http://localhost:5000 to see the MLflow UI.
+
+**Terminal 2 — Run training:**
 
 ```powershell
 .\venv\Scripts\Activate.ps1
 python src/train.py
 ```
 
-You should see output like:
+This registers `StudentPerformanceModel` in MLflow's registry. The `mlruns/` and `mlartifacts/` folders are populated.
 
-```
-Validation OK: 316 train, 79 test rows
-Run ID  : <some-id>
-Accuracy: 0.8861
-F1 Score: 0.9109
-Created version 'X' of model 'StudentPerformanceModel'.
-```
-
-### 2c. Stop the local MLflow server
-
-Press `Ctrl+C` in the first terminal. Docker will run its own MLflow.
-
----
-
-## 3. Run Data Validation (optional, local)
+## 1.3 Run the API locally
 
 ```powershell
 .\venv\Scripts\Activate.ps1
-python src/validate.py
+uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-Output: `Validation PASSED 6/6 expectations`
-Report saved to: `monitoring/validation_report.html`
+`--reload` auto-restarts when you edit code. Open http://localhost:8000/docs.
+
+## 1.4 Run the frontend locally
+
+```powershell
+cd frontend
+npm run dev
+```
+
+Opens at http://localhost:5173 (Vite's default dev port). Edits hot-reload instantly.
+
+## 1.5 Run other scripts (anytime, in venv)
+
+```powershell
+python src/validate.py                    # Generates validation_report.html
+python monitoring/drift_report.py         # Generates drift_report.html
+python src/feast_repo/prep_data.py        # Prepares Feast data
+cd src/feast_repo; feast apply; cd ../..  # Registers Feast features
+promptfoo eval                            # Tests prompts (Node.js, not venv)
+```
+
+## When to use Mode 1
+
+- Active development — fastest iteration
+- Debugging Python errors (full stack traces)
+- Running one-off scripts (validate, drift, train)
+- You DON'T need Docker/K8s running
 
 ---
 
-## 4. Run Drift Report (optional, local)
+# Mode 2 — Docker (Single Service)
+
+Run just ONE container in isolation, useful for testing a single piece.
 
 ```powershell
-.\venv\Scripts\Activate.ps1
-python monitoring/drift_report.py
+docker compose up -d api          # Just the API + dependencies (MLflow)
+docker compose up -d mlflow       # Just MLflow
+docker compose up -d frontend     # Just the frontend + its dependency (api)
+docker compose up -d prometheus grafana   # Just monitoring stack
 ```
 
-Report saved to: `monitoring/drift_report.html`
+Docker Compose automatically starts any service this one `depends_on`.
+
+```powershell
+docker compose stop api           # Stop only the API
+docker compose restart api        # Restart only the API
+docker compose logs -f api        # Tail API logs
+```
+
+## When to use Mode 2
+
+- You want to test ONE service against the others
+- Debugging container-specific issues
+- Saving resources (not running all 8 containers)
 
 ---
 
-## 5. Feast Feature Store (optional, local)
+# Mode 3 — Docker Compose (Full Stack)
 
-### 5a. Prepare data for Feast
+Run all 8 services together. This is the "demo mode" — everything in containers, one command.
 
-```powershell
-.\venv\Scripts\Activate.ps1
-python src/feast_repo/prep_data.py
-```
+## 3.1 Prerequisite
 
-### 5b. Apply Feast definitions
+Train the model at least once (Mode 1, Step 1.2). The `mlruns/` and `mlartifacts/` folders get mounted into the MLflow + API containers.
 
-```powershell
-cd src/feast_repo
-feast apply
-cd ../..
-```
-
----
-
-## 6. Docker — Build & Start Everything
-
-### 6a. Build and start all containers
+## 3.2 Start everything
 
 ```powershell
-docker compose up --build -d
+docker compose up --build -d      # First time (builds images)
+docker compose up -d              # Subsequent times (fast)
 ```
 
-This starts 8 services: api, frontend, mlflow, marquez-db, marquez, marquez-web, prometheus, grafana.
+`-d` runs containers in the background (detached). Drop it to see logs streaming.
 
-First build takes a few minutes (downloading images, installing dependencies).
-
-### 6b. Verify all containers are running
+## 3.3 Verify
 
 ```powershell
 docker compose ps
 ```
 
-All services should show `Up` or `Running`.
+You should see 8 services in `Up` or `Running` state:
+- `api`, `frontend`, `mlflow`, `marquez-db`, `marquez`, `marquez-web`, `prometheus`, `grafana`
+
+## 3.4 Daily operations
+
+```powershell
+docker compose logs api --tail 20         # Recent API logs
+docker compose logs -f api                # Stream API logs live
+docker compose restart api                # Restart a service
+docker compose up --build -d api          # Rebuild + restart (after code change)
+docker compose down                       # Stop everything
+docker compose down -v                    # Stop + delete volumes (full reset)
+```
+
+## 3.5 Generate traffic for monitoring
+
+While Docker Compose is up, run training to populate Marquez:
+
+```powershell
+.\venv\Scripts\Activate.ps1
+python src/train.py
+```
+
+Send test requests to populate Grafana metrics:
+
+```powershell
+for ($i = 1; $i -le 50; $i++) {
+  Invoke-RestMethod -Uri "http://localhost:8000/predict" -Method POST `
+    -ContentType "application/json" `
+    -Body '{"school":"GP","sex":"F","age":18,"address":"U","famsize":"GT3","Pstatus":"A","Medu":4,"Fedu":4,"Mjob":"at_home","Fjob":"teacher","reason":"course","guardian":"mother","traveltime":2,"studytime":2,"failures":0,"schoolsup":"yes","famsup":"no","paid":"no","activities":"no","nursery":"yes","higher":"yes","internet":"no","romantic":"no","famrel":4,"freetime":3,"goout":4,"Dalc":1,"Walc":1,"health":3,"absences":6,"G1":5,"G2":6}' `
+    -TimeoutSec 5 | Out-Null
+}
+```
+
+## When to use Mode 3
+
+- Full demo / interview
+- Testing the entire system end-to-end locally
+- Validating the same setup that will go to production
 
 ---
 
-## 7. Docker — Useful Commands
+# Mode 4 — Kubernetes (Minikube)
 
-### View logs for a specific service
+Run the API + Frontend on Minikube (local Kubernetes). MLflow, Prometheus, Grafana, Marquez stay in Docker Compose — K8s pods reach them via the host IP.
+
+## 4.1 Prerequisites
+
+- Minikube installed and running: `minikube start`
+- Docker images pushed to DockerHub (`mithreshh/student-api:latest`, `mithreshh/student-frontend:latest`)
+- The GitHub Actions CI pipeline pushes these automatically on every push to `main`
+- MLflow running in Docker Compose: `docker compose up -d mlflow`
+
+## 4.2 Confirm host IP
+
+`k8s/api-deployment.yaml` uses `http://192.168.49.1:5000` for MLflow. Verify with:
 
 ```powershell
-docker compose logs api --tail 20
-docker compose logs mlflow --tail 20
-docker compose logs marquez --tail 20
-docker compose logs marquez-web --tail 5
-docker compose logs frontend --tail 10
-docker compose logs grafana --tail 10
+minikube ssh "ip route" | Select-String "default"
 ```
 
-### Follow logs in real time (Ctrl+C to stop)
+The IP after `via` should match `192.168.49.1`. If different, update the YAML.
+
+## 4.3 Deploy
 
 ```powershell
-docker compose logs -f api
+kubectl apply -f k8s/api-deployment.yaml
+kubectl apply -f k8s/frontend-deployment.yaml
 ```
 
-### Restart a single service (after config changes)
+## 4.4 Verify
 
 ```powershell
-docker compose up -d marquez-web
-docker compose up -d api
+kubectl get pods                  # Should show student-api (2 replicas) + student-frontend
+kubectl get services              # NodePort services on 30080 and 30081
+kubectl logs deploy/student-api   # Check API logs
 ```
 
-### Rebuild a single service (after code changes)
+Wait ~60 seconds for the API pods to pass their health checks.
+
+## 4.5 Access
+
+- API: http://localhost:30080
+- Frontend: http://localhost:30081
+- API Docs: http://localhost:30080/docs
+
+If those don't load on Windows + Docker Driver, run:
 
 ```powershell
-docker compose up --build -d api
-docker compose up --build -d frontend
+minikube service student-api-service --url
+minikube service student-frontend-service --url
 ```
 
-### Stop everything
+Minikube prints temporary URLs you can use instead.
+
+## 4.6 Common operations
 
 ```powershell
+kubectl rollout restart deploy student-api    # Restart pods (e.g., after image push)
+kubectl scale deploy student-api --replicas=4 # Scale up to 4 pods
+kubectl delete -f k8s/                        # Remove everything
+kubectl describe pod <pod-name>               # Detailed troubleshooting
+```
+
+## When to use Mode 4
+
+- Practice K8s commands
+- Demonstrate auto-scaling, self-healing, rolling updates
+- Closer to production behavior than Docker Compose
+
+---
+
+# Mode 5 — ArgoCD (GitOps)
+
+ArgoCD watches your Git repository and automatically deploys whatever's in `k8s/` to Kubernetes. Push to `main` → ArgoCD syncs in ~3 minutes. This is "GitOps".
+
+Your existing setup is at `argocd/application.yaml`:
+- Source: `https://github.com/Mithreshhh/mlops-.git`, branch `main`, path `k8s/`
+- Destination: `default` namespace on the in-cluster K8s
+- Auto-sync, auto-prune (delete K8s resources removed from Git), self-heal (revert manual K8s changes)
+
+## 5.1 One-time: Install ArgoCD into Minikube
+
+```powershell
+kubectl create namespace argocd
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+```
+
+Wait for all ArgoCD pods to be ready:
+
+```powershell
+kubectl get pods -n argocd
+```
+
+## 5.2 Apply your Application manifest
+
+```powershell
+kubectl apply -f argocd/application.yaml
+```
+
+This tells ArgoCD: "Watch this repo, sync these manifests."
+
+## 5.3 Access the ArgoCD UI
+
+```powershell
+kubectl port-forward svc/argocd-server -n argocd 8080:443
+```
+
+Open https://localhost:8080 (accept the self-signed cert warning).
+
+**Get the initial admin password:**
+
+```powershell
+kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | ForEach-Object { [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($_)) }
+```
+
+Login: `admin` / `<password from above>`
+
+You should see your `mlops-student` Application card showing `Synced` and `Healthy`.
+
+## 5.4 The GitOps workflow
+
+From this point, you don't run `kubectl apply` anymore. Just:
+
+```powershell
+# 1. Edit k8s/api-deployment.yaml (e.g., change replicas: 2 to replicas: 4)
+git add k8s/
+git commit -m "Scale API to 4 replicas"
+git push
+```
+
+Within ~3 minutes, ArgoCD detects the change and applies it automatically. You can also force a sync via the UI or:
+
+```powershell
+kubectl patch application mlops-student -n argocd --type merge -p '{\"operation\":{\"sync\":{}}}'
+```
+
+## 5.5 Useful ArgoCD commands
+
+```powershell
+kubectl get applications -n argocd                       # List apps
+kubectl describe application mlops-student -n argocd     # See sync status, last error
+kubectl delete application mlops-student -n argocd       # Remove (also removes K8s resources due to prune)
+```
+
+## When to use Mode 5
+
+- Demonstrating production-grade CD
+- Showing GitOps in interviews
+- Real teams: ArgoCD is industry standard for K8s deployments
+
+---
+
+# Recommended Workflow (Day-to-Day)
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  Develop & train in venv  →  Test in Docker Compose  →  Push to git │
+│         (Mode 1)                     (Mode 3)              ↓        │
+│                                                                     │
+│  CI builds image and pushes to DockerHub (GitHub Actions)           │
+│                                                                     │
+│                          ArgoCD pulls and deploys to K8s (Mode 5)   │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+## Daily quick start
+
+```powershell
+# Open project, activate venv
+.\venv\Scripts\Activate.ps1
+
+# Start full stack
+docker compose up -d
+
+# Make code changes, then:
+docker compose up --build -d api   # Rebuild changed service
+
+# Stop when done
 docker compose down
 ```
 
-### Stop everything AND delete volumes (full reset)
-
-```powershell
-docker compose down -v
-```
-
-### Check which ports are in use
-
-```powershell
-docker compose ps --format "table {{.Name}}\t{{.Ports}}\t{{.Status}}"
-```
-
 ---
 
-## 8. Lineage Events (Marquez)
+# Troubleshooting
 
-Lineage events are emitted automatically when you run `python src/train.py`.
-The script sends OpenLineage events to `http://localhost:5001` for three steps:
-
-- `data_ingestion`
-- `data_validation`
-- `model_training`
-
-To re-send lineage events (Docker must be running):
-
-```powershell
-.\venv\Scripts\Activate.ps1
-python src/train.py
-```
-
-Then open http://localhost:3002 to see the jobs in Marquez.
-
----
-
-## 9. Promptfoo (Prompt Testing)
-
-```powershell
-promptfoo eval
-```
-
-Config file: `promptfooconfig.yaml`
-
----
-
-## 10. DVC (Data Version Control)
-
-### Track a data file
-
-```powershell
-dvc add data/student-mat.csv
-```
-
-### Pull data (if cloned fresh)
-
-```powershell
-dvc pull
-```
-
----
-
-## 11. Common Troubleshooting
-
-| Problem | Solution |
-|---------|----------|
-| `localhost:8000` not loading | Run `docker compose logs api --tail 20` — if it says "Could not load model", you need to train locally first (Step 2) |
-| `localhost:5000` not loading | Wait 30-60 seconds — MLflow container installs mlflow on every start |
-| `localhost:3002` blank | Run `docker compose logs marquez-web --tail 5` — needs WEB_PORT env var (already set in docker-compose.yml) |
-| Marquez shows no jobs | Run `python src/train.py` locally while Docker is up (Step 8) |
-| Frontend can't reach API | Make sure api container is up: `docker compose logs api --tail 5` |
-| Port already in use | Stop local servers (MLflow, uvicorn) before running Docker, or `docker compose down` first |
-| `mlruns/` empty error | Train the model locally first (Step 2) before `docker compose up` |
-| Model version not found | Re-train with `python src/train.py` — it creates a new version in the registry |
-
----
-
-## Quick Start (TL;DR)
-
-```powershell
-# 1. Activate venv & train model
-.\venv\Scripts\Activate.ps1
-mlflow server --host 127.0.0.1 --port 5000          # Terminal 1
-
-.\venv\Scripts\Activate.ps1                           # Terminal 2
-python src/train.py                                   # Terminal 2
-
-# 2. Stop local MLflow (Ctrl+C in Terminal 1)
-
-# 3. Start Docker stack
-docker compose up --build -d
-
-# 4. Open in browser
-# Frontend:    http://localhost:3000
-# API docs:    http://localhost:8000/docs
-# MLflow:      http://localhost:5000
-# Marquez:     http://localhost:3002
-# Prometheus:  http://localhost:9090
-# Grafana:     http://localhost:3001
-
-# 5. Send lineage events to Marquez
-python src/train.py
-```
+| Symptom | Fix |
+|---------|-----|
+| `localhost:8000` not loading after `docker compose up` | Check `docker compose logs api`. If "Could not load model", train locally first (Mode 1, Step 1.2). |
+| `localhost:5000` takes 60+ seconds | MLflow container installs mlflow on each start. Normal. |
+| `localhost:3002` blank | Run `docker compose logs marquez-web`. The `WEB_PORT: "3000"` env var is set — restart it: `docker compose up -d marquez-web`. |
+| Marquez shows no jobs | Run `python src/train.py` while Docker is up. |
+| K8s pod restarting | `kubectl logs <pod>`. Usually MLflow unreachable — check host IP in `k8s/api-deployment.yaml`. |
+| ArgoCD shows `OutOfSync` | Click `Sync` in the UI, or wait 3 minutes for auto-sync. |
+| ArgoCD shows `Degraded` | `kubectl describe pod <failing-pod>` and check the events. |
+| `Port already in use` | Stop local servers first, or `docker compose down`. |

@@ -1,4 +1,10 @@
 import os
+import sys
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+
 import pandas as pd
 import numpy as np
 import mlflow
@@ -10,7 +16,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import accuracy_score, f1_score, confusion_matrix, ConfusionMatrixDisplay
-import sys
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from src.lineage import track_step
 
