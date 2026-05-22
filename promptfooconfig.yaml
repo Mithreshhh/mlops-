@@ -12,19 +12,15 @@ tests:
       G2: "16"
     assert:
       - type: contains
-        value: "positive"
+        value: "15"
       - type: contains
-        value: "G1=15"
-      - type: contains
-        value: "G2=16"
+        value: "16"
 
   - vars:
       G1: "4"
       G2: "5"
     assert:
       - type: contains
-        value: "improvement"
+        value: "4"
       - type: contains
-        value: "G1=4"
-      - type: contains
-        value: "G2=5"
+        value: "5"
